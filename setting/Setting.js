@@ -35,13 +35,14 @@ define([
     'jimu/BaseWidgetSetting',
     'jimu/utils',
     'jimu/portalUrlUtils',
+    'jimu/portalUtils',
     'jimu/dijit/CheckBox',
     '../toolSettings',
     './SingleToolSetting'
   ],
   function(
     declare, array, lang, Event, query, on, coreFx, dom, domClass, domStyle, domConstruct, domProp,
-    jsapiBundle, _WidgetsInTemplateMixin, BaseWidgetSetting, utils, portalUrlUtils, CheckBox, toolSettings,
+    jsapiBundle, _WidgetsInTemplateMixin, BaseWidgetSetting, utils, portalUrlUtils, portalUtils, CheckBox, toolSettings,
     SingleToolSetting) {
     return /** @alias module:widgets/Analysis/setting/Setting */ declare([
         BaseWidgetSetting, _WidgetsInTemplateMixin], {
@@ -60,6 +61,11 @@ define([
         this.checkboxList = [];
         this._initToolsData();
 
+        var portalUrl = portalUrlUtils.getStandardPortalUrl(this.appConfig.portalUrl);
+        var portal = portalUtils.getPortal(portalUrl);
+        var isOnline = portalUrlUtils.isOnline(portalUrl);
+        var livingAtlasConfigEnabled = isOnline ? true : (portal.livingAtlasGroupQuery && portal.livingAtlasGroupQuery.length > 0);
+
         if(window.isRTL){
           this.infoString = this.rowsData.length + '/0';
           this.infoRegex = /\d+$/;
@@ -75,7 +81,7 @@ define([
         })));
 
         array.forEach(this.rowsData, lang.hitch(this, function(row){
-          this._addRow(row);
+          this._addRow(row, livingAtlasConfigEnabled);
         }));
         domProp.set(this.infoText, 'innerHTML', utils.stripHTML(this.infoString.replace(this.infoRegex, 0)));
 
@@ -104,7 +110,7 @@ define([
        * Add a row to analysis dijit tool table.
        * @param {Object} rowData Config of analysis dijit tool
        */
-      _addRow: function(rowData){
+      _addRow: function(rowData, livingAtlasConfigEnabled){
         var toolName = rowData.name;
         //TODO: temporary fix
         if(rowData.title === 'chooseBestFacilities') {
@@ -173,7 +179,8 @@ define([
           toolLabel: this.nls[rowData.title],
           rowData: rowData,
           nls: this.nls,
-          appConfig: this.appConfig
+          appConfig: this.appConfig,
+          livingAtlasConfigEnabled: livingAtlasConfigEnabled
         });
         domStyle.set(toolSetting.domNode, 'display', 'none');
         toolSetting.placeAt(settingTd);

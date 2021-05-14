@@ -186,6 +186,14 @@ esriLang, PortalAnalysis) {
       return this.portalSelf !== null && this.portalSelf.isPortal === true;
     },
 
+    livingAtlasConfigEnabled: function() {
+      // only portal has the option to disable living atlas
+      if (this.isPortal()) {
+        return this.portalSelf && this.portalSelf.livingAtlasGroupQuery && this.portalSelf.livingAtlasGroupQuery.length > 0;
+      }
+      return true;
+    },
+
     //check to show analysis UX
     canPerformAnalysis: function(){
       return this.portalAnalysis !== null && this.portalAnalysis.canPerformAnalysis();

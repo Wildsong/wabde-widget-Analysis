@@ -53,6 +53,8 @@ define(['dojo/_base/declare',
      */
     rowData: null,
 
+    livingAtlasConfigEnabled: false,
+
     postCreate: function(){
       this.inherited(arguments);
 
@@ -91,11 +93,16 @@ define(['dojo/_base/declare',
       });
       this.resultChk.placeAt(this.resultOption);
 
-      this.readyToUseLayersChk = new CheckBox({
-        checked: true,
-        label: this.nls.showReadyToUseLayers
-      });
-      this.readyToUseLayersChk.placeAt(this.readyToUseLayersOption);
+      if (this.livingAtlasConfigEnabled) {
+        this.readyToUseLayersChk = new CheckBox({
+          checked: true,
+          label: this.nls.showReadyToUseLayers
+        });
+        this.readyToUseLayersChk.placeAt(this.readyToUseLayersOption);
+        domStyle.set(this.readyToUseLayersOption, 'display', 'block');
+      } else {
+        domStyle.set(this.readyToUseLayersOption, 'display', 'none');
+      }
 
       this.allowToExportChk = new CheckBox({
         checked: false,
@@ -131,7 +138,7 @@ define(['dojo/_base/declare',
         showHelp: this.helptipChk.getValue(),
         showCredits: this.creditsChk.getValue(),
         showChooseExtent: this.mapExtentChk.getValue(),
-        showReadyToUseLayers: this.readyToUseLayersChk.getValue(),
+        showReadyToUseLayers: this.livingAtlasConfigEnabled ? this.readyToUseLayersChk.getValue() : false,
         allowToExport: this.allowToExportChk.getValue()
       };
 
@@ -144,9 +151,11 @@ define(['dojo/_base/declare',
       }
 
       if(this.labelEditor.validate()){
-        ret.toolLabel = this.labelEditor.get('value');
-      }else{
-        ret.toolLabel = this.toolLabel || 'undefined';
+        var newLabel = this.labelEditor.get('value');
+        // Save the label in config only if it is different from the default tool name
+        if (newLabel !== this.toolLabel) {
+          ret.toolLabel = newLabel;
+        }
       }
 
       return ret;
@@ -155,11 +164,15 @@ define(['dojo/_base/declare',
     setConfig: function(config){
       this.config = config;
 
-      this.labelEditor.set('value', config.toolLabel);
+      if (config.toolLabel) {
+        this.labelEditor.set('value', config.toolLabel);
+      }
       this.helptipChk.setValue(Boolean(config.showHelp));
       this.creditsChk.setValue(Boolean(config.showCredits));
       this.mapExtentChk.setValue(Boolean(config.showChooseExtent));
-      this.readyToUseLayersChk.setValue(Boolean(config.showReadyToUseLayers));
+      if (this.livingAtlasConfigEnabled) {
+        this.readyToUseLayersChk.setValue(Boolean(config.showReadyToUseLayers));
+      }
       this.allowToExportChk.setValue(Boolean(config.allowToExport));
 
       if('returnFeatureCollection' in config){

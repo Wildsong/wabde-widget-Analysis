@@ -374,7 +374,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
           showHelp: this.currentToolSetting.showHelp,
           showChooseExtent: this.currentToolSetting.showChooseExtent,
           returnFeatureCollection: this.currentToolSetting.returnFeatureCollection,
-          showReadyToUseLayers: this.currentToolSetting.showReadyToUseLayers,
+          showReadyToUseLayers: this.privilegeUtil.livingAtlasConfigEnabled() && this.currentToolSetting.showReadyToUseLayers,
           isSingleTenant: isPortal,
           disableRunAnalysis: this.currentToolSetting.disableRunAnalysis === true,
           analysisMode: this.analysisMode,
