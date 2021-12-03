@@ -70,6 +70,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
   var clazz = declare([BaseWidget, _WidgetsInTemplateMixin, Evented], {
     baseClass: 'jimu-widget-analysis esriAnalysis',
 
+    isPortal: null,
     _hasContent: null,
     privilegeUtil: null,
     currentStack: 0,
@@ -89,6 +90,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
 
       this.popupMenu = PopupMenu.getInstance();
       this.privilegeUtil = PrivilegeUtil.getInstance();
+      this.isPortal = !portalUrlUtils.isOnline(this._getPortalUrl());
 
       this.viewStack = new ViewStack({
         viewType: 'dom',
@@ -129,7 +131,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
 
     _refreshAnalysisTool: function() {
       this.shelter.show();
-      layerUtil.getLayerObjects().then(lang.hitch(this, function(layerObjects) {
+      layerUtil.getLayerObjects(this.isPortal).then(lang.hitch(this, function(layerObjects) {
         // Validate the tool again because the map may has been changed.
         toolValidate.isValid(layerObjects, this.currentToolSetting, this.privilegeUtil);
         this.shelter.hide();
@@ -195,7 +197,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
       domStyle.set(this.homeBtn, 'display', '');
       this.toolCountInList = 0;
       var lastToolConfig = null;
-      return layerUtil.getLayerObjects().then(lang.hitch(this, function(layerObjects) {
+      return layerUtil.getLayerObjects(this.isPortal).then(lang.hitch(this, function(layerObjects) {
         array.forEach(this.config.analysisTools, lang.hitch(this, function(item, idx) {
           var toolSetting = toolSettings.findToolSetting(item.name);
           if (toolSetting !== null) {
@@ -275,10 +277,10 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
         if (helpFileName.toLowerCase() === 'geocodelocationsfromtable') {
           helpFileName = 'GeocodeLocationsfromTable';
         }
-        var isPortal = !portalUrlUtils.isOnline(this._getPortalUrl());
+
         var tooltipLink = new HelpLink({
           helpFileName: helpFileName,
-          isSingleTenant: isPortal,
+          isSingleTenant: this.isPortal,
           iconClassName: 'tooltip-icon',
           toolLabel: rowData.toolLabel,
           folderUrl: this.folderUrl,
@@ -325,14 +327,13 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
         this.helpLink = null;
       }
       if(rowData.showHelp){
-        var isPortal = !portalUrlUtils.isOnline(this._getPortalUrl());
         // Adjust for GeocodeLocationsfromTable, since its dijitID is GeocodeLocationsFromTable
         if (helpFileName.toLowerCase() === 'geocodelocationsfromtable') {
           helpFileName = 'GeocodeLocationsfromTable';
         }
         this.helpLink = new HelpLink({
           helpFileName: helpFileName,
-          isSingleTenant: isPortal,
+          isSingleTenant: this.isPortal,
           iconClassName: 'help-icon jimu-float-trailing',
           toolLabel: rowData.toolLabel,
           folderUrl: this.folderUrl,
@@ -361,7 +362,6 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
           this.currentAnalysisDijit = null;
           domConstruct.empty(this.toolCtr);
         }
-        var isPortal = !portalUrlUtils.isOnline(this._getPortalUrl());
 
         var args = {
           map: this.map,
@@ -375,12 +375,12 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
           showChooseExtent: this.currentToolSetting.showChooseExtent,
           returnFeatureCollection: this.currentToolSetting.returnFeatureCollection,
           showReadyToUseLayers: this.privilegeUtil.livingAtlasConfigEnabled() && this.currentToolSetting.showReadyToUseLayers,
-          isSingleTenant: isPortal,
+          isSingleTenant: this.isPortal,
           disableRunAnalysis: this.currentToolSetting.disableRunAnalysis === true,
           analysisMode: this.analysisMode,
           showGeoAnalyticsParams: this.analysisMode === "bigdata" &&
             this.privilegeUtil.canPerformGeoAnalytics(),
-          showBrowseLayers: this.privilegeUtil.isPortal() && this.analysisMode !== "raster"
+          showBrowseLayers: this.isPortal && this.analysisMode !== "raster"
         };
 
         if(this.privilegeUtil.portalSelf && this.privilegeUtil.portalSelf.creditAssignments === 'enabled') {
@@ -409,7 +409,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
           args.allowChooseLabel = false;
         }
 
-        var layerObjectsDfd = layerUtil.getLayerObjects();
+        var layerObjectsDfd = layerUtil.getLayerObjects(this.isPortal);
 
         if(this.currentToolSetting.title === 'geocodeLocations') {
           if(this.privilegeUtil.portalSelf.helperServices.asyncGeocode) {
@@ -532,6 +532,12 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
       return optionalArgs;
     },
 
+    _isAnalysisLayer: function(layer) {
+      var isInternal = !this.isPortal && layer.analysisProxyCheck != null ? layer.analysisProxyCheck === "failure" : false;
+
+      return !isInternal;
+    },
+
     _prepareLayers: function(layerObjects, geomTypes) {
       var geoType, types = ['point', 'polyline', 'polygon'], matchedLayers = [];
 
@@ -542,7 +548,7 @@ function(declare, lang, html, array, domStyle, domAttr, domClass, domGeom, Defer
       }
 
       array.forEach(layerObjects, function(layer) {
-        if (layer.declaredClass === "esri.layers.FeatureLayer") {
+        if (this._isAnalysisLayer(layer) && layer.declaredClass === "esri.layers.FeatureLayer") {
           geoType = jimuUtils.getTypeByGeometryType(layer.geometryType);
           if (types.indexOf(geoType) >= 0 && (layer.url || layer.graphics.length > 0)) {
             matchedLayers.push(layer);

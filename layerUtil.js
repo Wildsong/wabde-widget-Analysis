@@ -22,11 +22,15 @@ define([
   'esri/layers/FeatureLayer',
   'esri/layers/GeoRSSLayer',
   'esri/layers/WFSLayer',
-  'jimu/LayerInfos/LayerInfos'
-], function(lang, array, all, Deferred, FeatureLayer, GeoRSSLayer, WFSLayer, LayerInfos) {
+  'esri/request',
+  'jimu/LayerInfos/LayerInfos',
+  'jimu/shared/utils'
+], function(lang, array, all, Deferred, FeatureLayer, GeoRSSLayer, WFSLayer, esriRequest, LayerInfos, jimuUtils) {
   var mo = {};
+  var proxyCheckPromise;
+  var proxyCheckedServers = {};
 
-  mo.getLayerObjects = function(){
+  mo.getLayerObjects = function(isPortal){
     var retDef = new Deferred();
     var layerInfosObject = LayerInfos.getInstanceSync();
 
@@ -96,12 +100,98 @@ define([
           resultArray.push(layer);
         }
       });
-      retDef.resolve(resultArray);
+      mo.checkLayers(resultArray, isPortal).then(function() {
+        retDef.resolve(resultArray);
+      });
     }, function() {
       retDef.resolve([]);
     });
 
     return retDef;
+  };
+
+  mo.checkLayers = function(layers, isPortal) {
+    var promAll, def;
+    if (proxyCheckPromise) {
+      // Multiple Requests return first promise
+      return proxyCheckPromise;
+    }
+    def = new Deferred();
+    if (isPortal || layers.length === 0) {
+      def.resolve();
+      return def;
+    }
+
+    proxyCheckPromise = def;
+    promAll = [];
+    layers.forEach(function(layer) {
+      if (layer.url && !jimuUtils.isHostedService(layer.url) && !mo.isPortalHostedService(layer.url)) {
+        if (!layer.analysisProxyCheck) {
+          promAll.push(mo._getProxyServiceInfo(layer));
+        }
+      }
+    });
+    if (promAll.length === 0) {
+      def.resolve();
+      proxyCheckPromise = null;
+    } else {
+      all(promAll).always(function() {
+        def.resolve();
+        proxyCheckPromise = null;
+      });
+    }
+    return def;
+  };
+
+  mo.isPortalHostedService = function(url) {
+    if (!url) {
+      return false;
+    }
+    var lowerCaseUrl = url.toLowerCase(), hosted = "/hosted/";
+    return lowerCaseUrl.indexOf(hosted) !== -1;
+  }
+
+  mo._getProxyServiceInfo = function(layer) {
+    var def = new Deferred(), curServer, found;
+
+    var serviceUrl = layer.url + ((layer.url.indexOf("?") > -1) ? "&" : "?") + "f=json";
+    var url = layer.url;
+    var token = typeof layer._getToken === 'function' ? layer._getToken() : null;
+    var serverId = url.substring(0, url.indexOf("/", 9));
+
+    // did we already check this server?
+    found = array.some(Object.keys(proxyCheckedServers), function(id) {
+      curServer = url.substring(0, url.indexOf("/", 9));
+      if (id === curServer) {
+        layer.analysisProxyCheck = proxyCheckedServers[id]; //set the checked result
+        return true;
+      }
+    }, this);
+    if (found) {
+      def.resolve();
+    } else {
+      if (token) {
+        serviceUrl += "&token=" + token;
+      }
+      esriRequest({
+        url: serviceUrl,
+        content: null
+      },
+      {
+        useProxy: true
+      }).then(function() {
+        layer.analysisProxyCheck = "success";
+        proxyCheckedServers[serverId] = "success";
+        def.resolve({});
+      }, function() {
+        layer.analysisProxyCheck = "failure";
+        if (!proxyCheckedServers[serverId]) {
+          proxyCheckedServers[serverId] = "failure";
+        }
+        def.resolve();
+      });
+    }
+    return def;
   };
 
   mo.getTableInfos = function() {
